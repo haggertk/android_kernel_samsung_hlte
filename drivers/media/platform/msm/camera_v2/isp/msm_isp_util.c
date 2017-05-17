@@ -489,8 +489,8 @@ static int msm_isp_send_hw_cmd(struct vfe_device *vfe_dev,
 				pr_err("%s:%d len %d\n",
 					__func__, __LINE__,
 					reg_cfg_cmd->u.dmi_info.len);
-			return -EINVAL;
-		}
+				return -EINVAL;
+			}
 			if (((UINT_MAX -
 				reg_cfg_cmd->u.dmi_info.hi_tbl_offset) <
 				(reg_cfg_cmd->u.dmi_info.len -
@@ -549,6 +549,7 @@ static int msm_isp_send_hw_cmd(struct vfe_device *vfe_dev,
 		}
 		temp = msm_camera_io_r(vfe_dev->vfe_base +
 			reg_cfg_cmd->u.mask_info.reg_offset);
+
 		temp &= ~reg_cfg_cmd->u.mask_info.mask;
 		temp |= reg_cfg_cmd->u.mask_info.val;
 		msm_camera_io_w(temp, vfe_dev->vfe_base +
@@ -607,7 +608,7 @@ static int msm_isp_send_hw_cmd(struct vfe_device *vfe_dev,
 			reg_cfg_cmd->u.dmi_info.len =
 				reg_cfg_cmd->u.dmi_info.len / 2;
 
-		for (i = 0; i < reg_cfg_cmd->u.dmi_info.len / 4; i++) {
+		for (i = 0; i < reg_cfg_cmd->u.dmi_info.len/4; i++) {
 			lo_val = msm_camera_io_r(vfe_dev->vfe_base +
 					vfe_dev->hw_info->dmi_reg_offset + 0x4);
 
@@ -632,6 +633,12 @@ static int msm_isp_send_hw_cmd(struct vfe_device *vfe_dev,
 		uint32_t *data_ptr = cfg_data +
 			reg_cfg_cmd->u.rw_info.cmd_data_offset/4;
 		for (i = 0; i < reg_cfg_cmd->u.rw_info.len/4; i++) {
+			if ((data_ptr < cfg_data) ||
+				(UINT_MAX / sizeof(*data_ptr) <
+				 (data_ptr - cfg_data)) ||
+				(sizeof(*data_ptr) * (data_ptr - cfg_data) >=
+				 cmd_len))
+				return -EINVAL;
 			*data_ptr++ = msm_camera_io_r(vfe_dev->vfe_base +
 				reg_cfg_cmd->u.rw_info.reg_offset);
 			reg_cfg_cmd->u.rw_info.reg_offset += 4;
