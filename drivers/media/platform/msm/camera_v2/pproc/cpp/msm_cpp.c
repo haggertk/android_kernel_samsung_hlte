@@ -1583,9 +1583,9 @@ long msm_cpp_subdev_ioctl(struct v4l2_subdev *sd,
 				kfree(cpp_dev->fw_name_bin);
 				cpp_dev->fw_name_bin = NULL;
 			}
-			if (ioctl_ptr->len == 0 || ioctl_ptr->len >= MSM_CPP_MAX_FW_NAME_LEN) {
-				pr_err("Error: ioctl_ptr->len = %d \n",
-					 ioctl_ptr->len);
+
+			if (ioctl_ptr->len == 0) {
+				pr_err("ioctl_ptr->len is 0\n");
 				mutex_unlock(&cpp_dev->mutex);
 				return -EINVAL;
 			}
