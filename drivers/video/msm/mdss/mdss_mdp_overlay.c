@@ -46,37 +46,17 @@
 #define PP_CLK_CFG_OFF 0
 #define PP_CLK_CFG_ON 1
 
-#ifdef	__MDSS_DEBUG__
-
+#ifdef __MDSS_DEBUG__
 #define ID_PRINTK(mdss_id, fmt, args...)   if(mfd->index == mdss_id) printk(fmt, ##args);
 #else
-
 #define ID_PRINTK(mdss_id, fmt, args...)
 #endif
 
-enum mdss_id_state {
-	ID_LCD = 0,
-	ID_HDMI = 1
-};
-int get_lcd_attached(void);
-
-
-#ifdef CONFIG_FB_MSM_CAMERA_CSC
-u8 pre_csc_update = 0xFF;
-#endif
-
-#define MEM_PROTECT_SD_CTRL 0xF
-
 #define OVERLAY_MAX 10
-
-struct sd_ctrl_req {
-	unsigned int enable;
-} __attribute__ ((__packed__));
 
 #if defined (CONFIG_FB_MSM_MDSS_DBG_SEQ_TICK)
 static struct mdss_tick_debug mdss_dbg_tick;
 #endif
-struct list_head *pipes_used_dbg;
 
 DEFINE_MUTEX(free_list_purge_mutex);
 
@@ -95,26 +75,6 @@ static inline u32 left_lm_w_from_mfd(struct msm_fb_data_type *mfd)
 {
 	struct mdss_mdp_ctl *ctl = mfd_to_ctl(mfd);
 	return ctl->mixer_left->width;
-}
-
-static int mdss_mdp_overlay_sd_ctrl(struct msm_fb_data_type *mfd,
-					unsigned int enable)
-{
-	struct sd_ctrl_req request;
-	unsigned int resp = -1;
-	int ret = 0;
-	pr_debug("sd_ctrl %u\n", enable);
-
-	request.enable = enable;
-
-	ret = scm_call(SCM_SVC_MP, MEM_PROTECT_SD_CTRL,
-		&request, sizeof(request), &resp, sizeof(resp));
-	pr_debug("scm_call MEM_PROTECT_SD_CTRL(%u): ret=%d, resp=%x",
-				enable, ret, resp);
-	if (ret)
-		return ret;
-
-	return resp;
 }
 
 static int mdss_mdp_overlay_get(struct msm_fb_data_type *mfd,
@@ -1224,7 +1184,7 @@ static int __overlay_queue_pipes(struct msm_fb_data_type *mfd)
 		 * When secure display is enabled, if there is a non secure
 		 * display pipe, skip that
 		 */
-		if ((mdp5_data->sd_enabled) &&
+		if (mdss_get_sd_client_cnt() &&
 			!(pipe->flags & MDP_SECURE_DISPLAY_OVERLAY_SESSION)) {
 			pr_warn("Non secure pipe during secure display: %u: %08X, skip\n",
 					pipe->num, pipe->flags);
@@ -1331,17 +1291,7 @@ int mdss_mdp_overlay_kickoff(struct msm_fb_data_type *mfd,
 	}
 
 	mutex_lock(&mdp5_data->ov_lock);
-	if (mfd->panel_info->type == DTV_PANEL) {
-		ret = mdss_mdp_overlay_start(mfd);
-		if (ret) {
-			pr_err("unable to start overlay %d (%d)\n",
-						mfd->index, ret);
-			mutex_unlock(&mdp5_data->ov_lock);
-			if (ctl->shared_lock)
-				mutex_unlock(ctl->shared_lock);
-			return ret;
-		}
-	}
+	ctl->bw_pending = 0;
 	mutex_lock(&mdp5_data->list_lock);
 
 	/*
@@ -1359,8 +1309,13 @@ int mdss_mdp_overlay_kickoff(struct msm_fb_data_type *mfd,
 	 * secure display session
 	 */
 	if (!sd_in_pipe && mdp5_data->sd_enabled) {
-		if (0 == mdss_mdp_overlay_sd_ctrl(mfd, 0))
+		/* disable the secure display on last client */
+		if (mdss_get_sd_client_cnt() == 1)
+			ret = mdss_mdp_secure_display_ctrl(0);
+		if (!ret) {
+			mdss_update_sd_client(mdp5_data->mdata, false);
 			mdp5_data->sd_enabled = 0;
+		}
 	}
 
 	if (!ctl->shared_lock)
@@ -1412,10 +1367,13 @@ int mdss_mdp_overlay_kickoff(struct msm_fb_data_type *mfd,
 	mutex_lock(&mdp5_data->ov_lock);
 
 	if (ret == 0) {
-		if (!mdp5_data->sd_enabled && (sd_in_pipe == 1)) {
-			ret = mdss_mdp_overlay_sd_ctrl(mfd, 1);
-			if (ret == 0)
+		if (!mdp5_data->sd_enabled && sd_in_pipe) {
+			if (!mdss_get_sd_client_cnt())
+				ret = mdss_mdp_secure_display_ctrl(1);
+			if (!ret) {
 				mdp5_data->sd_enabled = 1;
+				mdss_update_sd_client(mdp5_data->mdata, true);
+			}
 		}
 	}
 
