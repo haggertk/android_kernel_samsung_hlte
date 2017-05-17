@@ -1028,9 +1028,9 @@ int msm_isp_close_node(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
 	long rc;
 	struct vfe_device *vfe_dev = v4l2_get_subdevdata(sd);
-	ISP_DBG("%s\n", __func__);
 	mutex_lock(&vfe_dev->realtime_mutex);
 	mutex_lock(&vfe_dev->core_mutex);
+
 	if (vfe_dev->vfe_open_cnt == 0) {
 		pr_err("%s: Invalid close\n", __func__);
 		mutex_unlock(&vfe_dev->core_mutex);
