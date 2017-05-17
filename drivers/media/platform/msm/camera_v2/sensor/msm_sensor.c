@@ -17,8 +17,8 @@
 #include "msm_camera_io_util.h"
 #include "msm_camera_i2c_mux.h"
 
-//#define CONFIG_MSMB_CAMERA_DEBUG
-
+#define I2C_USER_REG_DATA_MAX 1024
+/*#define CONFIG_MSMB_CAMERA_DEBUG*/
 #undef CDBG
 #ifdef CONFIG_MSMB_CAMERA_DEBUG
 #define CDBG(fmt, args...) pr_err(fmt, ##args)
@@ -514,6 +514,13 @@ int msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 			break;
 		}
 
+		if ((!conf_array.size) ||
+			(conf_array.size > I2C_USER_REG_DATA_MAX )) {
+			pr_err("%s:%d failed\n", __func__, __LINE__);
+			rc = -EFAULT;
+			break;
+		}
+
 		if (conf_array.data_type == MSM_CAMERA_I2C_BURST_DATA) {
 
 			burst_reg_setting = (void *)kzalloc(conf_array.size *
@@ -655,6 +662,13 @@ int msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 		if (copy_from_user(&conf_array,
 			(void *)cdata->cfg.setting,
 			sizeof(struct msm_camera_i2c_seq_reg_setting))) {
+			pr_err("%s:%d failed\n", __func__, __LINE__);
+			rc = -EFAULT;
+			break;
+		}
+
+		if ((!conf_array.size) ||
+			(conf_array.size > I2C_USER_REG_DATA_MAX )) {
 			pr_err("%s:%d failed\n", __func__, __LINE__);
 			rc = -EFAULT;
 			break;
