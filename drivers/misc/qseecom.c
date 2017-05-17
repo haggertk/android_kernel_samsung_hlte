@@ -1119,8 +1119,8 @@ static int qseecom_unload_app(struct qseecom_dev_handle *data,
 	bool found_dead_app = false;
 
 	if (!memcmp(data->client.app_name, "keymaste", strlen("keymaste"))) {
-		pr_warn("Do not unload keymaster app from tz\n");
-		return 0;
+		pr_debug("Do not unload keymaster app from tz\n");
+		goto unload_exit;
 	}
 
 	if (data->client.app_id > 0) {
@@ -1215,6 +1215,7 @@ static int qseecom_unload_app(struct qseecom_dev_handle *data,
 		spin_unlock_irqrestore(&qseecom.registered_app_list_lock,
 								flags1);
 	}
+unload_exit:
 	qseecom_unmap_ion_allocated_memory(data);
 	data->released = true;
 	return ret;
@@ -1412,9 +1413,8 @@ static int __validate_send_cmd_inputs(struct qseecom_dev_handle *data,
 		pr_err("Client or client handle is not initialized\n");
 		return -EINVAL;
 	}
-
-	if (((req->cmd_req_buf == NULL) && (req->resp_len != 0)) ||
-				(req->resp_buf == NULL)) {
+	if (((req->resp_buf == NULL) && (req->resp_len != 0)) ||
+						(req->cmd_req_buf == NULL)) {
 		pr_err("cmd buffer or response buffer is null\n");
 		return -EINVAL;
 	}
@@ -1424,23 +1424,19 @@ static int __validate_send_cmd_inputs(struct qseecom_dev_handle *data,
 		pr_err("cmd buffer address not within shared bufffer\n");
 		return -EINVAL;
 	}
-
-
-	if (((uintptr_t)req->cmd_req_buf < 
-		data->client.user_virt_sb_base) ||
-	    ((uintptr_t)req->cmd_req_buf >=
-	    (data->client.user_virt_sb_base + data->client.sb_length))) {
+	if (((uintptr_t)req->resp_buf <
+				data->client.user_virt_sb_base)  ||
+		((uintptr_t)req->resp_buf >=
+		(data->client.user_virt_sb_base + data->client.sb_length))) {
 		pr_err("response buffer address not within shared bufffer\n");
 		return -EINVAL;
 	}
-
 	if ((req->cmd_req_len == 0) ||
 		(req->cmd_req_len > data->client.sb_length) ||
 		(req->resp_len > data->client.sb_length)) {
-		pr_err("cmd buffer length or response buffer length not valid\n");
+		pr_err("cmd buf length or response buf length not valid\n");
 		return -EINVAL;
 	}
-
 	if (req->cmd_req_len > UINT_MAX - req->resp_len) {
 		pr_err("Integer overflow detected in req_len & rsp_len\n");
 		return -EINVAL;
@@ -1450,7 +1446,7 @@ static int __validate_send_cmd_inputs(struct qseecom_dev_handle *data,
 		pr_debug("Not enough memory to fit cmd_buf.\n");
 		pr_debug("resp_buf. Required: %u, Available: %zu\n",
 				(req->cmd_req_len + req->resp_len),
-				data->client.sb_length);
+					data->client.sb_length);
 		return -ENOMEM;
 	}
 	if ((uintptr_t)req->cmd_req_buf > (ULONG_MAX - req->cmd_req_len)) {
@@ -1477,7 +1473,7 @@ static int __validate_send_cmd_inputs(struct qseecom_dev_handle *data,
 	}
 	return 0;
 }
- 
+
 static int __qseecom_send_cmd(struct qseecom_dev_handle *data,
 				struct qseecom_send_cmd_req *req)
 {
@@ -1651,7 +1647,6 @@ int __boundary_checks_offset(struct qseecom_send_modfd_cmd_req *req,
 }
 
 #define SG_ENTRY_SZ   sizeof(struct qseecom_sg_entry)
-
 static int __qseecom_update_cmd_buf(void *msg, bool cleanup,
 					struct qseecom_dev_handle *data,
 					bool listener_svc)
@@ -1727,7 +1722,7 @@ static int __qseecom_update_cmd_buf(void *msg, bool cleanup,
 			update = (uint32_t *) field;
 
 			if (__boundary_checks_offset(cmd_req, lstnr_resp, data,
-						false, i))
+							false, i))
 				goto err;
 			if (cleanup)
 				*update = 0;
@@ -1751,9 +1746,11 @@ static int __qseecom_update_cmd_buf(void *msg, bool cleanup,
 				}
 			} else if ((data->type == QSEECOM_LISTENER_SERVICE) &&
 					(lstnr_resp->ifd_data[i].fd > 0)) {
-				if (lstnr_resp->ifd_data[i].cmd_buf_offset >
-							lstnr_resp->resp_len -
-					sizeof(struct qseecom_sg_entry)) {
+				if ((lstnr_resp->resp_len <
+					SG_ENTRY_SZ * sg_ptr->nents) ||
+					(lstnr_resp->ifd_data[i].cmd_buf_offset >
+					(lstnr_resp->resp_len -
+					SG_ENTRY_SZ * sg_ptr->nents))) {
 					pr_err("Invalid offset = 0x%x\n",
 						lstnr_resp->ifd_data[i].
 							cmd_buf_offset);
@@ -4695,8 +4692,7 @@ static int qseecom_suspend(struct platform_device *pdev, pm_message_t state)
 	mutex_lock(&qsee_bw_mutex);
 	mutex_lock(&clk_access_lock);
 
-	if (qseecom.cumulative_mode != INACTIVE &&
-		qseecom.current_mode != INACTIVE) {
+	if (qseecom.current_mode != INACTIVE) {
 		ret = msm_bus_scale_client_update_request(
 			qseecom.qsee_perf_client, INACTIVE);
 		if (ret)
