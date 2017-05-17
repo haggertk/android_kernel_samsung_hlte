@@ -2115,10 +2115,8 @@ static void msm_spi_process_message(struct msm_spi *dd)
 		dd->num_xfrs_grped = 1;
 		msm_spi_process_transfer(dd);
 	}
-
 	if (dd->qup_ver)
 		write_force_cs(dd, 0);
-
 	return;
 
 error:
